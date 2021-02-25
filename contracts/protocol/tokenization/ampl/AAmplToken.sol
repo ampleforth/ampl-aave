@@ -242,7 +242,7 @@ contract AAmplToken is VersionedInitializable, IncentivizedERC20, IAToken {
     require(amountScaled != 0, Errors.CT_INVALID_BURN_AMOUNT);
 
     ExtData memory e = _fetchExtData();
-    _burnScaled(user, amountScaled, e);
+    _burnScaled(user, amountScaled, e, _totalScaledAMPLDeposited);
     _totalScaledAMPLDeposited = _totalScaledAMPLDeposited.sub(amount.mul(e.AMPLScalar));
 
     IERC20(UNDERLYING_ASSET_ADDRESS).safeTransfer(receiverOfUnderlying, amount);
@@ -270,7 +270,7 @@ contract AAmplToken is VersionedInitializable, IncentivizedERC20, IAToken {
     require(amountScaled != 0, Errors.CT_INVALID_MINT_AMOUNT);
 
     ExtData memory e = _fetchExtData();
-    _mintScaled(user, amountScaled, e);
+    _mintScaled(user, amountScaled, e, _totalScaledAMPLDeposited);
     _totalScaledAMPLDeposited = _totalScaledAMPLDeposited.add(amount.mul(e.AMPLScalar));
 
     emit Transfer(address(0), user, amount);
@@ -298,7 +298,7 @@ contract AAmplToken is VersionedInitializable, IncentivizedERC20, IAToken {
     // require(amountScaled != 0, Errors.CT_INVALID_MINT_AMOUNT);
 
     ExtData memory e = _fetchExtData();
-    _mintScaled(RESERVE_TREASURY_ADDRESS, amountScaled, e);
+    _mintScaled(RESERVE_TREASURY_ADDRESS, amountScaled, e, _totalScaledAMPLDeposited);
     _totalScaledAMPLDeposited = _totalScaledAMPLDeposited.add(amount.mul(e.AMPLScalar));
 
     emit Transfer(address(0), RESERVE_TREASURY_ADDRESS, amount);
@@ -393,7 +393,6 @@ contract AAmplToken is VersionedInitializable, IncentivizedERC20, IAToken {
     bool validate
   ) internal {
     uint256 index = POOL.getReserveNormalizedIncome(UNDERLYING_ASSET_ADDRESS);
-    uint256 amountScaled = amount.rayDiv(index);
 
     ExtData memory e = _fetchExtData();
     uint256 totalSupplyInternal = super.totalSupply();
@@ -402,10 +401,12 @@ contract AAmplToken is VersionedInitializable, IncentivizedERC20, IAToken {
     uint256 fromBalanceScaled = _balanceOfScaled(super.balanceOf(from), totalSupplyInternal, totalSupplyScaled);
     uint256 toBalanceScaled = _balanceOfScaled(super.balanceOf(to), totalSupplyInternal, totalSupplyScaled);
 
-    uint256 fromBalanceBefore = fromBalanceScaled.rayMul(index);
-    uint256 toBalanceBefore = toBalanceScaled.rayMul(index);
-
-    _transferScaled(from, to, amountScaled, e);
+    // amountInternal = (amountScaled * totalSupplyInternal) / totalSupplyScaled
+    uint256 amountScaled = amount.rayDiv(index);
+    uint256 amountInternal = amountScaled
+      .mul(totalSupplyInternal)
+      .div(totalSupplyScaled);
+    super._transfer(from, to, amountInternal);
 
     if (validate) {
       POOL.finalizeTransfer(
@@ -413,8 +414,8 @@ contract AAmplToken is VersionedInitializable, IncentivizedERC20, IAToken {
         from,
         to,
         amount,
-        fromBalanceBefore,
-        toBalanceBefore
+        fromBalanceScaled.rayMul(index), // fromBalanceBefore
+        toBalanceScaled.rayMul(index)    // toBalanceBefore
       );
     }
 
@@ -450,7 +451,8 @@ contract AAmplToken is VersionedInitializable, IncentivizedERC20, IAToken {
    **/
   function scaledBalanceOf(address user) external view override returns (uint256) {
     return _balanceOfScaled(
-      super.balanceOf(user), super.totalSupply(),
+      super.balanceOf(user),
+      super.totalSupply(),
       _totalSupplyScaled(_fetchExtData(), _totalScaledAMPLDeposited)
     );
   }
@@ -469,7 +471,11 @@ contract AAmplToken is VersionedInitializable, IncentivizedERC20, IAToken {
   {
     uint256 totalSupplyScaled = _totalSupplyScaled(_fetchExtData(), _totalScaledAMPLDeposited);
     return (
-      _balanceOfScaled(super.balanceOf(user), super.totalSupply(), totalSupplyScaled),
+      _balanceOfScaled(
+        super.balanceOf(user),
+        super.totalSupply(),
+        totalSupplyScaled
+      ),
       totalSupplyScaled
     );
   }
@@ -503,7 +509,8 @@ contract AAmplToken is VersionedInitializable, IncentivizedERC20, IAToken {
     returns (uint256)
   {
     uint256 userBalanceScaled = _balanceOfScaled(
-      super.balanceOf(user), super.totalSupply(),
+      super.balanceOf(user),
+      super.totalSupply(),
       _totalSupplyScaled(_fetchExtData(), _totalScaledAMPLDeposited)
     );
     return userBalanceScaled.rayMul(POOL.getReserveNormalizedIncome(UNDERLYING_ASSET_ADDRESS));
@@ -512,16 +519,6 @@ contract AAmplToken is VersionedInitializable, IncentivizedERC20, IAToken {
 
   // ---------------------------------------------------------------------------
   // AAMPL custom methods
-
-  /**
-   * @dev transferAmountInternal = (transferAmountScaled * totalSupplyInternal) / totalSupplyScaled
-   **/
-  function _transferScaled(address from, address to, uint256 transferAmountScaled, ExtData memory e) private returns (uint256) {
-    uint256 totalSupplyInternal = super.totalSupply();
-    uint256 totalSupplyScaled = _totalSupplyScaled(e, _totalScaledAMPLDeposited);
-    uint256 transferAmountInternal = transferAmountScaled.mul(totalSupplyInternal).div(totalSupplyScaled);
-    super._transfer(from, to, transferAmountInternal);
-  }
 
   /**
    * @dev mintAmountInternal is mint such that the following holds true
@@ -535,11 +532,11 @@ contract AAmplToken is VersionedInitializable, IncentivizedERC20, IAToken {
    *
    * mintAmountInternal = (totalSupplyInternalBefore*userBalanceScaledAfter - totalSupplyScaledAfter*userBalanceInternalBefore)/otherBalanceScaledBefore
    **/
-  function _mintScaled(address user, uint256 mintAmountScaled, ExtData memory e) private returns (uint256) {
+  function _mintScaled(address user, uint256 mintAmountScaled, ExtData memory e, uint256 totalScaledAMPLDeposited) private returns (uint256) {
     uint256 totalSupplyInternalBefore = super.totalSupply();
     uint256 userBalanceInternalBefore = super.balanceOf(user);
 
-    uint256 totalSupplyScaledBefore = _totalSupplyScaled(e, _totalScaledAMPLDeposited);
+    uint256 totalSupplyScaledBefore = _totalSupplyScaled(e, totalScaledAMPLDeposited);
     uint256 userBalanceScaledBefore = _balanceOfScaled(userBalanceInternalBefore, totalSupplyInternalBefore, totalSupplyScaledBefore);
     uint256 otherBalanceScaledBefore = totalSupplyScaledBefore.sub(userBalanceScaledBefore);
 
@@ -566,11 +563,11 @@ contract AAmplToken is VersionedInitializable, IncentivizedERC20, IAToken {
    *
    * burnAmountInternal = (totalSupplyScaledAfter*userBalanceInternalBefore - totalSupplyInternalBefore*userBalanceScaledAfter)/otherBalanceScaledBefore
    **/
-  function _burnScaled(address user, uint256 burnAmountScaled, ExtData memory e) private returns (uint256) {
+  function _burnScaled(address user, uint256 burnAmountScaled, ExtData memory e, uint256 totalScaledAMPLDeposited) private returns (uint256) {
     uint256 totalSupplyInternalBefore = super.totalSupply();
     uint256 userBalanceInternalBefore = super.balanceOf(user);
 
-    uint256 totalSupplyScaledBefore = _totalSupplyScaled(e, _totalScaledAMPLDeposited);
+    uint256 totalSupplyScaledBefore = _totalSupplyScaled(e, totalScaledAMPLDeposited);
     uint256 userBalanceScaledBefore = _balanceOfScaled(userBalanceInternalBefore, totalSupplyInternalBefore, totalSupplyScaledBefore);
     uint256 otherBalanceScaledBefore = totalSupplyScaledBefore.sub(userBalanceScaledBefore);
 
@@ -590,7 +587,9 @@ contract AAmplToken is VersionedInitializable, IncentivizedERC20, IAToken {
    *                       = balanceInternal . λ
    **/
   function _balanceOfScaled(uint256 balanceInternal, uint256 totalSupplyInternal, uint256 totalSupplyScaled) private pure returns (uint256) {
-    return balanceInternal.mul(totalSupplyScaled).div(totalSupplyInternal);
+    return balanceInternal
+      .mul(totalSupplyScaled)
+      .div(totalSupplyInternal);
   }
 
   /**
