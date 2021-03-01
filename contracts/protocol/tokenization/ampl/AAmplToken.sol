@@ -128,7 +128,7 @@ interface IAMPLDebtToken {
     * On mint and burn a private variable `_totalScaledAMPLDeposited`
       keeps track of the scaled AMPL principal deposited.
  */
-contract AAMPLToken is VersionedInitializable, IncentivizedERC20, IAToken {
+contract AAmplToken is VersionedInitializable, IncentivizedERC20, IAToken {
   using WadRayMath for uint256;
   using SafeERC20 for IERC20;
 
@@ -179,6 +179,8 @@ contract AAMPLToken is VersionedInitializable, IncentivizedERC20, IAToken {
   constructor(
     ILendingPool pool,
     address underlyingAssetAddress,
+    address stableDebtTokenAddress,
+    address variableDebtTokenAddress,
     address reserveTreasuryAddress,
     string memory tokenName,
     string memory tokenSymbol,
@@ -188,9 +190,8 @@ contract AAMPLToken is VersionedInitializable, IncentivizedERC20, IAToken {
     UNDERLYING_ASSET_ADDRESS = underlyingAssetAddress;
     RESERVE_TREASURY_ADDRESS = reserveTreasuryAddress;
 
-    DataTypes.ReserveData memory reserveData = pool.getReserveData(underlyingAssetAddress);
-    STABLE_DEBT_TOKEN_ADDRESS = reserveData.stableDebtTokenAddress;
-    VARIABLE_DEBT_TOKEN_ADDRESS = reserveData.variableDebtTokenAddress;
+    STABLE_DEBT_TOKEN_ADDRESS = stableDebtTokenAddress;
+    VARIABLE_DEBT_TOKEN_ADDRESS = variableDebtTokenAddress;
   }
 
   function getRevision() internal pure virtual override returns (uint256) {
@@ -538,8 +539,8 @@ contract AAMPLToken is VersionedInitializable, IncentivizedERC20, IAToken {
   function _mintScaled(address user, uint256 mintAmountScaled, ExtData memory e) private returns (uint256) {
     uint256 totalSupplyInternalBefore = super.totalSupply();
     uint256 userBalanceInternalBefore = super.balanceOf(user);
-
     uint256 totalSupplyScaledBefore = _totalSupplyScaled(e, _totalScaledAMPLDeposited);
+
     uint256 userBalanceScaledBefore = _balanceOfScaled(userBalanceInternalBefore, totalSupplyInternalBefore, totalSupplyScaledBefore);
     uint256 otherBalanceScaledBefore = totalSupplyScaledBefore.sub(userBalanceScaledBefore);
 
@@ -590,6 +591,9 @@ contract AAMPLToken is VersionedInitializable, IncentivizedERC20, IAToken {
    *                       = balanceInternal . λ
    **/
   function _balanceOfScaled(uint256 balanceInternal, uint256 totalSupplyInternal, uint256 totalSupplyScaled) private pure returns (uint256) {
+    if (balanceInternal == 0 || totalSupplyScaled == 0) {
+      return 0;
+    }
     return balanceInternal.mul(totalSupplyScaled).div(totalSupplyInternal);
   }
 
@@ -609,7 +613,7 @@ contract AAMPLToken is VersionedInitializable, IncentivizedERC20, IAToken {
    *      - AMPL scalar form Ampleforth ERC-20 (Λ)
    *      - principal borrowed and scaledAMPL borrowed from the debt contracts
    **/
-  function _fetchExtData() private view returns (ExtData memory) {
+  function _fetchExtData() public view returns (ExtData memory) {
     ExtData memory _extContractData;
     _extContractData.AMPLScalar = AMPL_SCALED_TOTAL_SUPPLY.div(IERC20(UNDERLYING_ASSET_ADDRESS).totalSupply());
 
