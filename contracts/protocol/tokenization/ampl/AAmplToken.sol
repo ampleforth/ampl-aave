@@ -520,12 +520,7 @@ contract AAmplToken is VersionedInitializable, IncentivizedERC20, IAToken {
   function _transferScaled(address from, address to, uint256 transferAmountScaled, ExtData memory e) private {
     uint256 totalSupplyInternal = super.totalSupply();
     uint256 totalSupplyScaled = _totalSupplyScaled(e, _totalScaledAMPLDeposited);
-    uint256 transferAmountInternal;
-    if(totalSupplyScaled == 0){
-      transferAmountInternal = 0;
-    } else {
-      transferAmountInternal = transferAmountScaled.mul(totalSupplyInternal).div(totalSupplyScaled);
-    }
+    uint256 transferAmountInternal = transferAmountScaled.mul(totalSupplyInternal).div(totalSupplyScaled);
     super._transfer(from, to, transferAmountInternal);
   }
 
