@@ -617,7 +617,10 @@ contract AAmplToken is VersionedInitializable, IncentivizedERC20, IAToken {
    *                      = λ . balanceInternal
    **/
   function _balanceOfScaled(uint256 balanceInternal, uint256 totalSupplyInternal, uint256 totalSupplyScaled) private pure returns (uint256) {
-    return balanceInternal.mul(totalSupplyScaled).div(totalSupplyInternal);
+    return (
+      totalSupplyInternal == 0 ? 0 :
+        balanceInternal.mul(totalSupplyScaled).div(totalSupplyInternal)
+    );
   }
 
   /**
@@ -625,6 +628,7 @@ contract AAmplToken is VersionedInitializable, IncentivizedERC20, IAToken {
    *                        = λ . totalSupplyInternal
    **/
   function _totalSupplyScaled(ExtData memory e, uint256 totalGonsDeposited) private pure returns (uint256) {
+    // require(e.GonsPerAMPL != 0); // This should never happen
     return totalGonsDeposited
       .sub(e.totalGonsBorrowed)
       .div(e.GonsPerAMPL)
