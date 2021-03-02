@@ -28,7 +28,6 @@ contract AmplVariableDebtToken is DebtTokenBase, IVariableDebtToken {
   // which controls the AMPL expansion/contraction.
   // TOTAL_GONS/ampl.scaledTotalSupply, saving an external call to the AMPL contract
   // and setting it as a local contract constant.
-  // NOTE: This should line up EXACTLY with the value on the AMPL contract
   uint256 private constant AMPL_SCALED_TOTAL_SUPPLY = uint256(type(int128).max);
 
   // Keeps track of the 'gons' borrowed from the aave system
