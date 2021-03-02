@@ -482,14 +482,14 @@ contract AAmplToken is VersionedInitializable, IncentivizedERC20, IAToken {
    * @return the current total supply
    **/
   function totalSupply() public view override(IncentivizedERC20, IERC20) returns (uint256) {
-    uint256 currentSupplyScaled = _totalSupplyScaled(_fetchExtData(), _totalGonsDeposited);
+    uint256 totalSupplyScaled = _totalSupplyScaled(_fetchExtData(), _totalGonsDeposited);
 
-    if (currentSupplyScaled == 0) {
-      // currentSupplyInternal should also be zero in this case (super.totalSupply())
+    if (totalSupplyScaled == 0) {
+      // totalSupplyInternal should also be zero in this case (super.totalSupply())
       return 0;
     }
 
-    return currentSupplyScaled.rayMul(POOL.getReserveNormalizedIncome(UNDERLYING_ASSET_ADDRESS));
+    return totalSupplyScaled.rayMul(POOL.getReserveNormalizedIncome(UNDERLYING_ASSET_ADDRESS));
   }
 
   /**
@@ -503,9 +503,15 @@ contract AAmplToken is VersionedInitializable, IncentivizedERC20, IAToken {
     override(IncentivizedERC20, IERC20)
     returns (uint256)
   {
+    uint256 totalSupplyScaled = _totalSupplyScaled(_fetchExtData(), _totalGonsDeposited);
+
+    if (totalSupplyScaled == 0) {
+      // totalSupplyInternal should also be zero in this case (super.totalSupply())
+      return 0;
+    }
+
     uint256 userBalanceScaled = _balanceOfScaled(
-      super.balanceOf(user), super.totalSupply(),
-      _totalSupplyScaled(_fetchExtData(), _totalGonsDeposited)
+      super.balanceOf(user), super.totalSupply(), totalSupplyScaled
     );
     return userBalanceScaled.rayMul(POOL.getReserveNormalizedIncome(UNDERLYING_ASSET_ADDRESS));
   }
@@ -614,9 +620,6 @@ contract AAmplToken is VersionedInitializable, IncentivizedERC20, IAToken {
    *                      = λ . balanceInternal
    **/
   function _balanceOfScaled(uint256 balanceInternal, uint256 totalSupplyInternal, uint256 totalSupplyScaled) private pure returns (uint256) {
-    if (balanceInternal == 0 || totalSupplyScaled == 0) {
-      return 0;
-    }
     return balanceInternal.mul(totalSupplyScaled).div(totalSupplyInternal);
   }
 
