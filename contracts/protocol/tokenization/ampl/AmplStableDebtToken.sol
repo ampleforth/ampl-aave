@@ -36,7 +36,8 @@ contract AmplStableDebtToken is IStableDebtToken, DebtTokenBase {
   // which controls the AMPL expansion/contraction.
   // TOTAL_GONS/ampl.scaledTotalSupply, saving an external call to the AMPL contract
   // and setting it as a local contract constant.
-  uint256 private constant AMPL_SCALED_TOTAL_SUPPLY = uint256(type(int128).max);
+  // NOTE: This should line up EXACTLY with the value on the AMPL contract
+  uint256 private constant GONS_TOTAL_SUPPLY = uint256(type(int128).max);
 
   // Keeps track of the 'gons' borrowed from the aave system
   uint256 private _totalGonsBorrowed;
@@ -391,6 +392,6 @@ contract AmplStableDebtToken is IStableDebtToken, DebtTokenBase {
 
 
   function fetchGonsPerAMPL() internal view returns (uint256) {
-    return AMPL_SCALED_TOTAL_SUPPLY.div(IERC20(UNDERLYING_ASSET_ADDRESS).totalSupply());
+    return GONS_TOTAL_SUPPLY.div(IERC20(UNDERLYING_ASSET_ADDRESS).totalSupply());
   }
 }
