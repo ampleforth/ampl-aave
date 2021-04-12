@@ -636,7 +636,8 @@ contract AAmplToken is VersionedInitializable, IncentivizedERC20, IAToken {
    **/
   function _scaledTotalSupply(ExtData memory e, int256 totalGonsDeposited) private pure returns (uint256) {
     // require(totalGonsDeposited>=e.totalGonsBorrowed);
-    return _gonsToAMPL(e.totalAMPLSupply, uint256(totalGonsDeposited.sub(e.totalGonsBorrowed)))
+    int256 totalGonsBorrowed = _amplToGons(e.totalAMPLSupply, e.totalPrincipalBorrowed).toInt256Safe();
+    return _gonsToAMPL(e.totalAMPLSupply, uint256(totalGonsDeposited.sub(totalGonsBorrowed)))
       .add(e.totalPrincipalBorrowed);
   }
 
